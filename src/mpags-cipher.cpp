@@ -109,7 +109,6 @@ int main(int argc, char* argv[])
     std::vector< std::future< std::string > > futures;
 
     std::size_t substrLen = inputText.size()/j;
-    std::cout << substrLen << std::endl;
 
     for (std::size_t iThr = 0; iThr < j; iThr++) {
         std::string inTextChunk = "";
