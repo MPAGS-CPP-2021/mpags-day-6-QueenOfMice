@@ -5,6 +5,8 @@
 #include "TransformChar.hpp"
 
 #include <cctype>
+#include <future>
+#include <thread>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -99,8 +101,55 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // create n chunks of the string outputText and apply the cipher in parallel 
+    // to all of them...
+    size_t j = 4; // hardcoded for now XXX later take from cmd line
+
+    // vector containing futures of the threads
+    std::vector< std::future< std::string > > futures;
+
+    std::size_t substrLen = inputText.size()/j;
+    std::cout << substrLen << std::endl;
+
+    for (std::size_t iThr = 0; iThr < j; iThr++) {
+        std::string inTextChunk = "";
+        if (iThr != j -1) {
+            inTextChunk = inputText.substr(iThr*substrLen, substrLen);
+        } else {
+            inTextChunk = inputText.substr(iThr*substrLen, substrLen + inputText.size()%j);
+        }
+
+        // Lambda to start a thread that applies the cipher
+        auto applyCiphOnThr = [&cipher, inTextChunk, &settings] () {
+            std::cout << "[thread] Wait for it...\n"; 
+            const std::string outTextChunk{cipher->applyCipher(inTextChunk, settings.cipherMode)};
+            std::cout << "[thread] Done!\n";
+            return outTextChunk;
+        };
+
+        futures.push_back(std::async(std::launch::async, applyCiphOnThr));
+    }
+
+    // wait until all threads are done, then put the chunks together
+    bool wait = true;
+    while (wait) {
+        for (auto& f : futures) {
+            // check for all threads if they are not(!) ready
+            // and break as soon as one is not ready
+            if (f.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+                break;
+            } else {
+                // else, all are ready --> good to go, set wait to false
+                wait = false;
+            }
+        }
+    }
+    std::string outputText;
+    for (auto& f : futures) {
+        outputText += f.get();
+    }
+
     // Run the cipher on the input text, specifying whether to encrypt/decrypt
-    const std::string outputText{cipher->applyCipher(inputText, settings.cipherMode)};
 
     // Output the encrypted/decrypted text to stdout/file
     if (!settings.outputFile.empty()) {
